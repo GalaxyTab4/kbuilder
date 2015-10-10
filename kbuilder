@@ -1,0 +1,98 @@
+#!/bin/bash
+
+. .kbuilder.cfg
+
+read -p "
+		(c)lean \
+		(m)enuconfig 
+		(b)build \
+		(d)tb-tool
+		(i)info \
+		m(k)bootfs
+		 :" CMDMENU
+
+case "$CMDMENU" in
+        c) clear; echo ""
+			echo "cleaning:"
+			echo ""
+			rm -frv $GOHOME/.out
+			mkdir -pv $GOHOME/.out/modules
+			cd $KDIR
+			make clean && make mrproper
+			echo ""
+			$GOHOME/kbuilder	
+            ;;
+        m) clear; echo ""
+			echo "menuconfig:"
+			echo ""
+			make $KERNEL_DEFCONFIG \
+			VARIANT_DEFCONFIG=$VARIANT_DEFCONFIG \
+			DEBUG_DEFCONFIG=$DEBUG_DEFCONFIG \
+			SELINUX_DEFCONFIG=$SELINUX_DEFCONFIG 
+			make menuconfig && wait
+			$GOHOME/kbuilder	
+            ;;
+        b) clear; echo ""
+			echo "make:"
+			echo ""
+			make $KERNEL_DEFCONFIG \
+			VARIANT_DEFCONFIG=$VARIANT_DEFCONFIG \
+			DEBUG_DEFCONFIG=$DEBUG_DEFCONFIG \
+			SELINUX_DEFCONFIG=$SELINUX_DEFCONFIG 
+			make -j12 && make modules
+			#make -j12 CONFIG_DEBUG_SECTION_MISMATCH=y > make.kernel.log 2>&1
+			#make -j12 modules > make.modules.log 2>&1
+			cp arch/arm/boot/*zImage $GOHOME/.out/boot.img-zImage
+			find -type f -name *.ko -exec cp {} $GOHOME/.out/modules/ \;
+			cd $GOHOME/.out/modules/
+			$STRIP --strip-unneeded *.ko
+			cd $GOHOME
+			ls -al $GOHOME/.out/modules/ $GOHOME/.out/boot*
+			$GOHOME/kbuilder	
+            ;;
+        d) clear; echo ""
+			echo "dtbtool:"
+			echo ""
+			$GOHOME/.tools/dtbTool1 -o $GOHOME/.out/boot.img-dtb -p ./scripts/dtc/ ./arch/arm/boot/
+			echo ""
+			$GOHOME/kbuilder	
+            ;;
+        f) clear; echo ""
+			echo "mkbootfs:"
+			echo ""
+			$GOHOME/.tools/mkbootfs $GOHOME/.ramdisk/ramdisk-bosp |gzip > $GOHOME/.out/ramdisk.img.gz
+			echo ""
+			$GOHOME/kbuilder	
+            ;;
+        i) clear; echo ""
+			echo "Settings:"
+			echo ""
+			echo ROM    	: $ROM && export ROM
+			echo KERNEL 	: $KRN && export KRN
+			echo RAMDISK	: $RAM && export RAM
+			echo CMDLINE	: $CMD && export CMD
+			echo DTB		: $DTB && export DTB
+			echo ""
+			$GOHOME/kbuilder	
+            ;;
+        k) clear; echo ""
+			echo "Settings:"
+			echo ""
+			$GOHOME/.tools/mkbootimg \
+			--kernel $KRN \
+			--ramdisk $RAM \
+			--dt $DTB \
+			--cmdline "$CMD" \
+			--base 0x00000000 --ramdisk_offset 0x02000000 --tags_offset 0x01E00000 --pagesize 2048 \
+			-o $GOHOME/.out/boot-$ROM.img
+			$GOHOME/kbuilder	
+			;;
+            *) echo "QUIT..." 
+            ;;
+esac
+
+echo $GOHOME/.out/boot-$ROM.img done!
+
+
+
+
